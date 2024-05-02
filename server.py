@@ -18,6 +18,46 @@ class PacketGenerator:
 
         print(len(packets), "no of packets")
         return packets
+    
+def go_back_n(sock, filename, packet_size, window_size, addr, timeout):
+    packet_gen = PacketGenerator(filename, packet_size)
+    packets = packet_gen.generate_packets()
+    
+    # seq_num = 0
+    base = 0
+    next_seq_num = 0
+    window_end = min(base + window_size, len(packets))
+    
+    while base < len(packets):
+        for i in range(base, window_end):
+            packet_with_seq = str(next_seq_num).zfill(4).encode() + packets[i] 
+            sock.sendto(packet_with_seq, addr)
+            print(f"Sent packet {i} with sequence number {next_seq_num}")
+            next_seq_num += 1
+
+        try:
+            sock.settimeout(timeout)
+            ack, _ = sock.recvfrom(1024)
+            ack_seq_num = int(ack.decode())
+            print(f"Received ACK for packet {ack_seq_num}")
+
+            if ack_seq_num >= base:
+                base = ack_seq_num + 1
+                window_end = min(base + window_size, len(packets))
+                next_seq_num = base
+            else:
+                print(f"Ignoring outdated ACK for packet {ack_seq_num}")
+        except socket.timeout:
+            print("Timeout occurred, retransmitting...")
+            next_seq_num = base
+
+    print("All packets sent and ACKed")
+    sock.sendto(b'SERVER_CLOSED', addr)
+    sock.settimeout(None)
+    print("Server closed")
+
+
+
 
 
 def stop_and_wait(sock, filename, packet_size, addr, timeout=0.1, max_attempts=3):
