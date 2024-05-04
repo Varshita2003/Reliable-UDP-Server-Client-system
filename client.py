@@ -1,13 +1,14 @@
-
-
 import socket
 import time
+
 def main():
     UDP_IP = "127.0.0.1"
     UDP_PORT = 5005
     MESSAGE = 'GBN'  # Change to 'GBN' or 'SR' for different protocols
     
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    
+    start_time = time.time()  # Record the start time
     
     sock.sendto(MESSAGE.encode(), (UDP_IP, UDP_PORT))
     
@@ -47,6 +48,9 @@ def main():
                     print(f"Ignoring duplicate or out-of-order packet {seq_num}")
         
         print("File received successfully")
+
+    elapsed_time = time.time() - start_time  # Calculate elapsed time
+    print(f"Total time elapsed: {elapsed_time:.2f} seconds")
 
     sock.close()
 
