@@ -2,6 +2,7 @@ import socket
 import time
 import os
 import sys
+
 class PacketGenerator:
     def __init__(self, filename, packet_size):
         self.filename = filename
@@ -22,6 +23,8 @@ class PacketGenerator:
 def go_back_n(sock, filename, packet_size, window_size, addr, timeout):
     packet_gen = PacketGenerator(filename, packet_size)
     packets = packet_gen.generate_packets()
+
+    print(len(packets))
     
     # seq_num = 0
     base = 0
@@ -40,6 +43,7 @@ def go_back_n(sock, filename, packet_size, window_size, addr, timeout):
             ack, _ = sock.recvfrom(1024)
             ack_seq_num = int(ack.decode())
             print(f"Received ACK for packet {ack_seq_num}")
+            print(len(packets))
 
             if ack_seq_num >= base:
                 base = ack_seq_num + 1
@@ -49,42 +53,13 @@ def go_back_n(sock, filename, packet_size, window_size, addr, timeout):
                 print(f"Ignoring outdated ACK for packet {ack_seq_num}")
         except socket.timeout:
             print("Timeout occurred, retransmitting...")
+            print(len(packets))
             next_seq_num = base
 
     print("All packets sent and ACKed")
     sock.sendto(b'SERVER_CLOSED', addr)
     sock.settimeout(None)
     print("Server closed")
-
-
-
-
-
-def stop_and_wait(sock, filename, packet_size, addr, timeout=0.1, max_attempts=3):
-    packet_gen = PacketGenerator(filename, packet_size)
-    packets = packet_gen.generate_packets()
-    
-    for packet in packets:
-        attempts = 0
-        while attempts < max_attempts:
-            sock.sendto(packet, addr)
-            start_time = time.time()
-            sock.settimeout(timeout)
-            try:
-                ack, _ = sock.recvfrom(1024)
-                if ack.decode() == 'ACK':
-                    print("Packet ACKed!")
-                    break
-            except socket.timeout:
-                print("Timeout occurred, retransmitting...")
-            finally:
-                attempts += 1
-            elapsed_time = time.time() - start_time
-
-    sock.sendto(b'SERVER_CLOSED', addr)
-    sock.settimeout(None)
-    print("Server closed")
-
 
 def selective_repeat(sock, filename, packet_size, window_size, addr):
     packet_gen = PacketGenerator(filename, packet_size)
@@ -93,23 +68,29 @@ def selective_repeat(sock, filename, packet_size, window_size, addr):
     seq_num = 0
     acks = [False] * len(packets)
     
-    while True:
+    while seq_num < len(packets):
         for i in range(seq_num, min(seq_num + window_size, len(packets))):
-            sock.sendto(packets[i], addr)
-            time.sleep(0.1)  # Simulating network delay
+            packet_with_seq = str(i).zfill(4).encode() + packets[i] 
+            sock.sendto(packet_with_seq, addr)
+            print(f"Sent packet {i} with sequence number {i}")
         
         ack, _ = sock.recvfrom(1024)
         ack_seq_num = int(ack.decode())
         
-        if ack_seq_num >= seq_num:
-            print(f"Packet {ack_seq_num} ACKed")
-            acks[ack_seq_num] = True
-            while seq_num < len(packets) and acks[seq_num]:
-                seq_num += 1
+        if ack_seq_num < seq_num:
+            print(f"Ignoring outdated ACK for packet {ack_seq_num}")
+        elif ack_seq_num >= seq_num + window_size:
+            print(f"Ignoring duplicate ACK for packet {ack_seq_num}")
         else:
-            print(f"Received outdated ACK for packet {ack_seq_num}")
+            acks[ack_seq_num] = True
+            print(f"Packet {ack_seq_num} ACKed")
+        
+        while seq_num < len(packets) and acks[seq_num]:
+            seq_num += 1
 
-
+    print("All packets sent and ACKed")
+    sock.sendto(b'SERVER_CLOSED', addr)
+    print("Server closed")
 
 def main():
     if len(sys.argv) != 5:
@@ -133,11 +114,12 @@ def main():
         data, addr = sock.recvfrom(1024)
         print(addr)
         if protocol_name == 'SW':
-            stop_and_wait(sock, 'loco.jpg', packet_size, addr, timeout=timeout)
+            # stop_and_wait(sock, 'loco.jpg', packet_size, addr, timeout=timeout)
+            go_back_n(sock, 'loco.jpg', packet_size, 1, addr, timeout=timeout)
         elif protocol_name == 'GBN':
             go_back_n(sock, 'loco.jpg', packet_size, window_size, addr, timeout=timeout)
         elif protocol_name == 'SR':
-            selective_repeat(sock, 'loco.jpg', packet_size, window_size, addr, timeout=timeout)
+            selective_repeat(sock, 'loco.jpg', packet_size, window_size, addr)
         else:
             print("Invalid protocol name:", protocol_name)
             break
