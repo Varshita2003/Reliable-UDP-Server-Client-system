@@ -61,7 +61,7 @@ def go_back_n(sock, filename, packet_size, window_size, addr, timeout):
     sock.settimeout(None)
     print("Server closed")
 
-def selective_repeat(sock, filename, packet_size, window_size, addr):
+def selective_repeat(sock, filename, packet_size, window_size, addr, timeout):
     packet_gen = PacketGenerator(filename, packet_size)
     packets = packet_gen.generate_packets()
     
@@ -119,7 +119,7 @@ def main():
         elif protocol_name == 'GBN':
             go_back_n(sock, 'loco.jpg', packet_size, window_size, addr, timeout=timeout)
         elif protocol_name == 'SR':
-            selective_repeat(sock, 'loco.jpg', packet_size, window_size, addr)
+            selective_repeat(sock, 'loco.jpg', packet_size, window_size, addr, timeout=timeout)
         else:
             print("Invalid protocol name:", protocol_name)
             break
